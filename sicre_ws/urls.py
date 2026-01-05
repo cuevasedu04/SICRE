@@ -18,10 +18,12 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from credencializacion.views import EnrolamientoViewSet
+from credencializacion.views import EnrolamientoViewSet, SigViewSet
 
 router = DefaultRouter()
 # ruta: cada vez que alguien entre a /api/expedientes, lo atiende el ViewSet
 router.register(r'expedientes', EnrolamientoViewSet)
+router.register(r'empleados-sig', SigViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Enrolamiento
+from .models import Enrolamiento, SicreTblSig
 import base64
 import binascii
 
@@ -50,4 +50,15 @@ class EnrolamientoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Enrolamiento
+        fields = '__all__'
+
+class EnrolamientoDataTableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Enrolamiento
+        fields = '__all__'
+
+
+class SigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SicreTblSig
         fields = '__all__'
