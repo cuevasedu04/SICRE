@@ -5,14 +5,17 @@ from rest_framework.response import Response
 from .models import Enrolamiento, SicreTblSig
 from .serializers import EnrolamientoSerializer, SigSerializer, EnrolamientoDataTableSerializer
 from django.db.models import Q
+from django.contrib.auth import authenticate
+from rest_framework.authtoken.models import Token
+from .serializers import LoginSerializer
+from rest_framework.views import APIView
+
 
 class EnrolamientoViewSet(viewsets.ModelViewSet):
     queryset = Enrolamiento.objects.all().order_by('-id_enrolamiento')
     serializer_class = EnrolamientoSerializer
     
-    # Esto habilita el ?search=texto en la URL
     filter_backends = [filters.SearchFilter]
-    # Definimos en qué columnas buscará Django 
     search_fields = ['rfc', 'num_empleado', 'nombre', 'paterno']   
 
     @action(detail=False, methods=['get'], url_path='listos-imprimir')
@@ -29,7 +32,6 @@ class EnrolamientoViewSet(viewsets.ModelViewSet):
             Q(num_empleado__isnull=True) | Q(num_empleado='')
         )
         
-        # Respetamos paginación si la usas
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -70,7 +72,6 @@ class EnrolamientoViewSet(viewsets.ModelViewSet):
             Q(firma__isnull=True) | Q(firma=b'')
         )
         
-        # Opcional: Si usas paginación en tu ViewSet, esto la respeta
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -89,7 +90,6 @@ class EnrolamientoViewSet(viewsets.ModelViewSet):
         actualizados = 0
 
         for sig in registros_sig:
-            # Buscamos si ya existe por RFC (o num_empleado si prefieres)
             obj, created = Enrolamiento.objects.update_or_create(
                 rfc=sig.rfc,
                 defaults={
@@ -108,8 +108,7 @@ class EnrolamientoViewSet(viewsets.ModelViewSet):
                     'activo': 1
                 }
             )
-            # Forzamos la actualización de ultima_carga al sincronizar
-            # (aunque auto_now=True en el modelo ya debería encargarse, esto asegura que se toque el registro)
+          
             if not created:
                 obj.save() 
 
@@ -127,11 +126,50 @@ class EnrolamientoViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 class SigViewSet(viewsets.ReadOnlyModelViewSet):
-    # Traemos todos los empleados ordenados por nombre
     queryset = SicreTblSig.objects.all().order_by('nombre')
     serializer_class = SigSerializer
     
     # Configuración del Buscador
     filter_backends = [filters.SearchFilter]
-    # Aquí le decimos que busque por RFC o por Nombre
     search_fields = ['rfc', 'nombres']
+
+
+
+class CustomLoginView(APIView):
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            email = serializer.validated_data['email']
+            password = serializer.validated_data['password']
+            
+      
+            user = authenticate(request, username=email, password=password)
+
+            if user is not None:
+                if not user.is_active:
+                    return Response({
+                        'status': 403,
+                        'message': 'Usuario inactivo'
+                    }, status=status.HTTP_200_OK)
+
+                token, created = Token.objects.get_or_create(user=user)
+
+                return Response({
+                    'status': 200,
+                    'message': 'Login exitoso',
+                    'model': {
+                        'token': token.key,
+                        'idUsuario': user.id,
+                        'nombreCompleto': f"{user.first_name} {user.last_name}",
+                        'email': user.email,
+                        'unidadAdscripcion': getattr(user, 'adscripcion', ''), 
+                        'area': 'Área del usuario' 
+                    }
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'status': 401,
+                    'message': 'Credenciales incorrectas'
+                }, status=status.HTTP_200_OK) 
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
